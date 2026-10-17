@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Пиксельная дуэль: DeepSeek против Opus</title>
+<meta name="description" content="Одно задание — пиксельный платформер в одном HTML с автопилотом. DeepSeek V4.1 Flash 1017 против Claude Opus 5.5: время, токены, цена. Обе игры можно запустить в браузере.">
+<meta property="og:title" content="Пиксельная дуэль: DeepSeek V4.1 Flash против Claude Opus 5.5">
+<meta property="og:description" content="Одно задание, один прогон. Играйте в обе игры прямо в браузере.">
+<meta property="og:image" content="media/opus.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&family=Unbounded:wght@700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0d0f13;--card:#151a1d;--line:#25302c;--fg:#F6F2E7;--mut:#9fb3ab;--acc:#13a07a;--acc2:#7fd4b3;--ds:#4d8bff;--op:#e0895a}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;background:radial-gradient(1400px 800px at 50% 0,#10372d 0,var(--bg) 70%) no-repeat,var(--bg);color:var(--fg);font:16px/1.6 Manrope,system-ui,sans-serif;-webkit-text-size-adjust:100%}
+a{color:var(--acc2)}
+.w{max-width:1080px;margin:0 auto;padding:0 16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:22px 0}
+header b{font:800 18px Unbounded,system-ui,sans-serif}
+header a{color:var(--mut);text-decoration:none;font-weight:600;font-size:14px}
+.kick{font:800 12px Manrope,system-ui,sans-serif;letter-spacing:.3em;color:var(--acc2);text-transform:uppercase}
+h1{font:800 clamp(28px,5vw,52px)/1.08 Unbounded,system-ui,sans-serif;margin:12px 0 16px}
+.lead{color:#cfd9d4;font-size:18px;max-width:760px;margin:0}
+.duel{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:34px 0 0}
+.card{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:20px;background:var(--card);overflow:hidden}
+.card img{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;image-rendering:pixelated;border-bottom:1px solid var(--line)}
+.body{padding:20px;display:flex;flex-direction:column;gap:14px;flex:1}
+.who{display:flex;align-items:center;gap:10px}
+.dot{width:12px;height:12px;border-radius:3px;flex:none}
+.ds .dot{background:var(--ds)}.op .dot{background:var(--op)}
+.card h2{margin:0;font:800 20px/1.2 Unbounded,system-ui,sans-serif}
+.via{color:var(--mut);font-size:14px;margin-top:-8px}
+dl{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0}
+dl div{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0}
+dt{color:var(--mut);font-size:12px;letter-spacing:.04em}
+dd{margin:2px 0 0;font:800 20px/1.2 Unbounded,system-ui,sans-serif;white-space:nowrap}
+dd small{font:600 12px Manrope,system-ui,sans-serif;color:var(--mut);display:block;white-space:normal}
+.btns{display:flex;flex-wrap:wrap;gap:10px;margin-top:auto}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:10px 20px;border-radius:14px;background:var(--acc);color:#fff;text-decoration:none;font-weight:800}
+.btn.g{background:transparent;border:1px solid var(--line);color:var(--fg);font-weight:600}
+h3{font:800 24px Unbounded,system-ui,sans-serif;margin:56px 0 10px}
+ul{padding-left:20px;margin:0;color:#cfd9d4}
+li{margin:6px 0}
+.vid{display:block;width:100%;height:auto;border-radius:18px;border:1px solid var(--line);background:#000}
+.note{border:1px solid var(--line);border-radius:16px;padding:16px 18px;background:rgba(21,26,29,.7);color:#cfd9d4}
+kbd{font:600 13px ui-monospace,monospace;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:1px 6px;background:#0f1316}
+footer{padding:56px 0 36px;color:var(--mut);font-size:14px}
+footer p{margin:6px 0}
+@media(max-width:820px){.duel{grid-template-columns:1fr}}
+@media(max-width:420px){dl{grid-template-columns:1fr 1fr}dl div:last-child{grid-column:1/-1}dd{font-size:18px}.btn{flex:1}}
+</style>
+</head>
+<body>
+<div class="w">
+<header><b>НейроСтек Lab</b><a href="https://github.com/neurostack-lab/llm-pixel-duel">GitHub</a></header>
+
+<div class="kick">Дуэль моделей · 17.10.2026</div>
+<h1>Пиксельный платформер с&nbsp;одного запроса</h1>
+<p class="lead">Две модели получили одинаковое задание: сделать 8-битный платформер в одном HTML-файле, с автопилотом, параллаксом и пиксельным шрифтом. У каждой был один запрос без доработок. Обе игры работают, ошибок JS ноль. Запустите и сравните сами.</p>
+
+<section class="duel">
+  <article class="card ds">
+    <img src="media/deepseek.png" alt="Кадр из игры DeepSeek V4.1 Flash 1017" width="960" height="540">
+    <div class="body">
+      <div class="who"><span class="dot"></span><h2>DeepSeek V4.1 Flash 1017</h2></div>
+      <div class="via">OpenRouter · размышления medium</div>
+      <dl>
+        <div><dt>Время</dt><dd>22 мин</dd></div>
+        <div><dt>Токены</dt><dd>39,5 тыс.<small>из них 32,6 тыс. размышлений</small></dd></div>
+        <div><dt>Цена</dt><dd>$0,025<small>списание OpenRouter</small></dd></div>
+      </dl>
+      <div class="btns"><a class="btn" href="deepseek/index.html">Играть</a><a class="btn g" href="raw/deepseek.html">Оригинал без звука</a></div>
+    </div>
+  </article>
+  <article class="card op">
+    <img src="media/opus.png" alt="Кадр из игры Claude Opus 5.5" width="960" height="540">
+    <div class="body">
+      <div class="who"><span class="dot"></span><h2>Claude Opus 5.5</h2></div>
+      <div class="via">Anthropic API · размышления medium</div>
+      <dl>
+        <div><dt>Время</dt><dd>7 мин</dd></div>
+        <div><dt>Токены</dt><dd>43,9 тыс.<small>из них 31,2 тыс. размышлений</small></dd></div>
+        <div><dt>Цена</dt><dd>≈$0,88<small>по прайсу OpenRouter</small></dd></div>
+      </dl>
+      <div class="btns"><a class="btn" href="opus/index.html">Играть</a><a class="btn g" href="raw/opus.html">Оригинал без звука</a></div>
+    </div>
+  </article>
+</section>
+
+<h3>Обе игры рядом</h3>
+<video class="vid" src="media/duel.mp4" poster="media/duel_poster.jpg" controls playsinline preload="none" width="1920" height="760"></video>
+
+<h3>Как играть</h3>
+<div class="note">Сразу после загрузки персонаж бежит сам: так задумано заданием. Стрелки и <kbd>Пробел</kbd> перехватывают управление. Звук включается первой клавишей или касанием, <kbd>M</kbd> выключает его. На телефоне без клавиатуры игра идёт в режиме демо, звук включается касанием.</div>
+
+<h3>Что важно знать</h3>
+<ul>
+  <li>Это один прогон на модель, а не бенчмарк. При повторе результат может быть другим.</li>
+  <li>Opus запускали через подписку Claude, поэтому его цена посчитана по прайсу OpenRouter: $4 за 1M входных и $20 за 1M выходных токенов. Цена DeepSeek — фактическое списание.</li>
+  <li>В задании было «звук не нужен». Звуки и музыку мы добавили сами, отдельным модулем на WebAudio. В код игр вставлены только вызовы звука в момент событий. Оригинальные ответы моделей лежат без изменений: <a href="raw/deepseek.html">raw/deepseek.html</a> и <a href="raw/opus.html">raw/opus.html</a>.</li>
+  <li>Текст задания и параметры запуска: <a href="https://github.com/neurostack-lab/llm-pixel-duel/blob/main/prompt.md">prompt.md</a>. Все замеры: <a href="results.json">results.json</a>.</li>
+</ul>
+
+<footer>
+  <p><a href="https://t.me/neurostack_news">НейроСтек</a> · <a href="https://t.me/neurosignal_news">НейроСигнал</a> · <a href="https://t.me/neurodengi_news">НейроДеньги</a> · <a href="https://github.com/neurostack-lab">GitHub</a></p>
+  <p>Наш код (звук, эта страница) распространяется по лицензии MIT. Игры написаны моделями.</p>
+</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,114 @@
+{
+ "date": "2026-10-17",
+ "task": "prompt.md",
+ "runs_per_model": 1,
+ "note": "Один прогон на модель. Opus запускали через подписку Claude, поэтому его цена пересчитана по прайсу OpenRouter ($4 за 1M входных и $20 за 1M выходных токенов). Цена DeepSeek — фактическое списание OpenRouter.",
+ "models": {
+  "deepseek": {
+   "name": "DeepSeek V4.1 Flash 1017",
+   "model_id": "deepseek/deepseek-v4.1-flash-1017",
+   "provider": "OpenRouter",
+   "reasoning_effort": "medium",
+   "max_tokens": 64000,
+   "time_total_s": 1329.9,
+   "time_to_first_token_s": 1.98,
+   "input_tokens": 317,
+   "output_tokens": 39474,
+   "reasoning_tokens": 32583,
+   "output_tokens_per_s": 29.7,
+   "cost_usd": 0.02494,
+   "cost_source": "фактическое списание OpenRouter",
+   "html_bytes": 17083,
+   "html_lines": 607,
+   "js_errors": 0,
+   "game": "deepseek/index.html",
+   "original": "raw/deepseek.html",
+   "raw_measurement": {
+    "ttft": 1.9764103004708886,
+    "total": 1329.9264772003517,
+    "usage": {
+     "prompt_tokens": 317,
+     "completion_tokens": 39474,
+     "total_tokens": 39791,
+     "cost": 0.02493519,
+     "is_byok": false,
+     "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+     },
+     "cost_details": {
+      "upstream_inference_cost": 0.02493519,
+      "upstream_inference_prompt_cost": 6.657e-05,
+      "upstream_inference_completions_cost": 0.02486862
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 32583,
+      "image_tokens": 0,
+      "audio_tokens": 0
+     }
+    },
+    "reasoning_chunks": 6207,
+    "html_bytes": 17083,
+    "html_lines": 607
+   }
+  },
+  "opus": {
+   "name": "Claude Opus 5.5",
+   "model_id": "claude-opus-5-5",
+   "provider": "Anthropic Messages API (подписка Claude)",
+   "reasoning_effort": "medium",
+   "max_tokens": 64000,
+   "time_total_s": 428.4,
+   "time_to_first_token_s": 2.53,
+   "input_tokens": 510,
+   "output_tokens": 43922,
+   "reasoning_tokens": 31190,
+   "output_tokens_per_s": 102.5,
+   "cost_usd": 0.88048,
+   "cost_source": "пересчёт по прайсу OpenRouter: 510×$4/1M + 43922×$20/1M",
+   "html_bytes": 20658,
+   "html_lines": 473,
+   "js_errors": 0,
+   "game": "opus/index.html",
+   "original": "raw/opus.html",
+   "raw_measurement": {
+    "ttft": 2.5300313672050834,
+    "total": 428.4350241301581,
+    "usage": {
+     "input_tokens": 510,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 43922,
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard",
+     "output_tokens_details": {
+      "thinking_tokens": 31190
+     },
+     "iterations": [
+      {
+       "input_tokens": 510,
+       "output_tokens": 43922,
+       "cache_read_input_tokens": 0,
+       "cache_creation_input_tokens": 0,
+       "cache_creation": {
+        "ephemeral_5m_input_tokens": 0,
+        "ephemeral_1h_input_tokens": 0
+       },
+       "type": "message",
+       "model": null
+      }
+     ]
+    },
+    "html_bytes": 20658,
+    "html_lines": 473
+   }
+  }
+ }
+}

@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Pixel Runner 8-bit</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;background:#0b0b12;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  canvas{width:960px;height:540px;image-rendering:pixelated;image-rendering:crisp-edges;display:block}
+</style>
+</head>
+<body>
+<canvas id="c" width="240" height="135"></canvas>
+<script>
+"use strict";
+(function(){
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const W = 240, H = 135, T = 8, GROUND_Y = 112;
+const SPEED = 1.5, GRAV = 0.30, JUMPV = -4.3, MAXFALL = 5;
+
+/* ---------------- pixel font (3x5) ---------------- */
+const FONT = {
+'0':[7,5,5,5,7],'1':[2,6,2,2,7],'2':[7,1,7,4,7],'3':[7,1,7,1,7],'4':[5,5,7,1,1],
+'5':[7,4,7,1,7],'6':[7,4,7,5,7],'7':[7,1,1,1,1],'8':[7,5,7,5,7],'9':[7,5,7,1,7],
+'A':[7,5,7,5,5],'B':[6,5,6,5,6],'C':[7,4,4,4,7],'D':[6,5,5,5,6],'E':[7,4,7,4,7],
+'F':[7,4,7,4,4],'G':[7,4,5,5,7],'H':[5,5,7,5,5],'I':[7,2,2,2,7],'J':[1,1,1,5,7],
+'K':[5,5,6,5,5],'L':[4,4,4,4,7],'M':[5,7,7,5,5],'N':[6,5,5,5,5],'O':[7,5,5,5,7],
+'P':[7,5,7,4,4],'Q':[7,5,5,7,3],'R':[7,5,7,6,5],'S':[7,4,7,1,7],'T':[7,2,2,2,2],
+'U':[5,5,5,5,7],'V':[5,5,5,5,2],'W':[5,5,7,7,5],'X':[5,5,2,5,5],'Y':[5,5,2,2,2],
+'Z':[7,1,2,4,7],' ':[0,0,0,0,0],':':[0,2,0,2,0],'-':[0,0,7,0,0],'!':[2,2,2,0,2],
+'.':[0,0,0,0,2]
+};
+function drawText(s,x,y,col,sc){
+  sc = sc||1;
+  ctx.fillStyle = col;
+  for(let i=0;i<s.length;i++){
+    const g = FONT[s[i]] || FONT[' '];
+    const gx = x + i*4*sc;
+    for(let r=0;r<5;r++){
+      const row = g[r];
+      if(!row) continue;
+      for(let b=0;b<3;b++){
+        if(row & (4>>b)) ctx.fillRect(gx + b*sc, y + r*sc, sc, sc);
+      }
+    }
+  }
+}
+const HEART = [0b0110110,0b1111111,0b1111111,0b0111110,0b0011100,0b0001000];
+function drawHeart(x,y){
+  ctx.fillStyle = '#e83030';
+  for(let r=0;r<6;r++){
+    const row = HEART[r];
+    for(let b=0;b<7;b++) if(row & (64>>b)) ctx.fillRect(x+b,y+r,1,1);
+  }
+}
+
+/* ---------------- rng ---------------- */
+let rngState = 1337;
+function rnd(){ rngState = (rngState*1664525 + 1013904223) >>> 0; return rngState/4294967296; }
+function rndInt(a,b){ return a + Math.floor(rnd()*(b-a+1)); }
+function hash2(x,y){
+  let h = Math.imul(x,374761393) + Math.imul(y,668265263);
+  h = Math.imul(h ^ (h>>>13), 1274126177);
+  return ((h ^ (h>>>16)) >>> 0)/4294967296;
+}
+
+/* ---------------- level ---------------- */
+const segs = [], plats = [], coins = [], enemies = [], particles = [];
+let genTile = 0, chunkN = 0;
+
+function addSeg(t0,t1){ segs.push({x0:t0*T, x1:t1*T}); }
+function addCoin(x,y){ coins.push({x:x, y:y, alive:true, ph: rnd()*6}); }
+
+function genChunk(){
+  if(chunkN === 0){
+    addSeg(0,26);
+    genTile = 26;
+    for(let i=0;i<4;i++) addCoin(56 + i*14, GROUND_Y-16);
+    chunkN++;
+    return;
+  }
+  const gapT = (chunkN % 4 === 0) ? 3 : 2;
+  const lenT = rndInt(7,13);
+  const s0 = genTile + gapT;
+  const s1 = s0 + lenT;
+  addSeg(s0,s1);
+
+  // coins arc over the gap
+  const gx0 = genTile*T, gx1 = s0*T;
+  addCoin(gx0 + (gx1-gx0)*0.5 - 3, GROUND_Y-24);
+  addCoin(gx0 - 7, GROUND_Y-16);
+  addCoin(gx1 + 3, GROUND_Y-16);
+
+  // coin row on segment
+  if(rnd() < 0.65){
+    const n = rndInt(2,4);
+    const cx0 = s0*T + 16;
+    for(let i=0;i<n;i++) if(cx0 + i*12 < s1*T - 12) addCoin(cx0 + i*12, GROUND_Y-16);
+  }
+
+  // floating platform
+  if(chunkN % 3 === 1 && lenT >= 10){
+    const pw = 32;
+    const px = Math.round(s0*T + (lenT*T - pw)/2);
+    plats.push({x:px, y:GROUND_Y-26, w:pw});
+    for(let i=0;i<3;i++) addCoin(px+8+i*8, GROUND_Y-38);
+  }
+
+  // enemy
+  if(chunkN > 2 && lenT >= 10 && rnd() < 0.75){
+    const eMin = s0*T + 24, eMax = s1*T - 32;
+    if(eMax - eMin > 20){
+      enemies.push({
+        x: eMin + rnd()*(eMax-eMin), y: GROUND_Y-8, w:8, h:8,
+        min:eMin, max:eMax, dir: rnd()<0.5?-1:1, spd:0.35, alive:true
+      });
+    }
+  }
+  genTile = s1;
+  chunkN++;
+}
+
+function groundAt(x){
+  for(let i=0;i<segs.length;i++){
+    const s = segs[i];
+    if(x >= s.x0 && x < s.x1) return true;
+    if(s.x0 > x) return false;
+  }
+  return false;
+}
+function segAt(x){
+  for(let i=0;i<segs.length;i++){
+    const s = segs[i];
+    if(x >= s.x0 && x < s.x1) return s;
+    if(s.x0 > x) return null;
+  }
+  return null;
+}
+
+/* ---------------- player / state ---------------- */
+const player = {x:20, y:GROUND_Y-12, vx:0, vy:0, w:8, h:12, onGround:false, facing:1, frame:0, animT:0, inv:0};
+let lives = 3, score = 0, respawnX = 20, tick = 0, prevJump = false, demoMode = true;
+const cam = {x:0};
+const input = {left:false, right:false, jump:false};
+const keys = {};
+
+function rectsOverlap(ax,ay,aw,ah,bx,by,bw,bh){
+  return ax < bx+bw && ax+aw > bx && ay < by+bh && ay+ah > by;
+}
+
+function burst(x,y,n,cols,spd){
+  for(let i=0;i<n;i++){
+    particles.push({
+      x:x, y:y,
+      vx:(rnd()-0.5)*spd,
+      vy:-rnd()*spd*0.9 - 0.3,
+      life: 16 + rnd()*16,
+      col: cols[(i)%cols.length]
+    });
+  }
+}
+
+/* ---------------- ai ---------------- */
+function aiThink(){
+  input.left = false;
+  input.right = true;
+  input.jump = false;
+  if(!player.onGround) return;
+
+  const px = player.x, cx = px + 4;
+
+  // gap ahead
+  if(!groundAt(cx + 11)){ input.jump = true; return; }
+
+  // enemy ahead
+  for(let i=0;i<enemies.length;i++){
+    const e = enemies[i];
+    if(!e.alive) continue;
+    const d = e.x - (px + 8);
+    if(d > -2 && d < 26 && Math.abs(e.y - player.y) < 16){ input.jump = true; return; }
+  }
+}
+
+/* ---------------- damage ---------------- */
+function respawnPlayer(){
+  player.x = respawnX;
+  player.y = GROUND_Y - player.h - 30;
+  player.vy = 0; player.vx = 0;
+  player.inv = 100;
+  cam.x = Math.max(0, player.x - W*0.5);
+}
+function hardReset(){
+  lives = 3; score = 0;
+  player.x = 20; player.y = GROUND_Y - player.h;
+  player.vx = 0; player.vy = 0; player.inv = 60; player.facing = 1;
+  respawnX = 20;
+  cam.x = 0;
+  for(let i=0;i<coins.length;i++) coins[i].alive = true;
+  for(let i=0;i<enemies.length;i++) enemies[i].alive = true;
+}
+function hurt(){
+  burst(player.x+4, player.y+6, 8, ['#ff5040','#ffffff'], 2.2);
+  lives--;
+  if(lives <= 0){ hardReset(); return; }
+  respawnPlayer();
+}
+
+/* ---------------- update ---------------- */
+function update(){
+  tick++;
+
+  if(demoMode) aiThink();
+  else {
+    input.left  = !!keys['ArrowLeft'];
+    input.right = !!keys['ArrowRight'];
+    input.jump  = !!(keys['Space'] || keys['ArrowUp']);
+  }
+  const jumpEdge = input.jump && !prevJump;
+  prevJump = input.jump;
+
+  // horizontal
+  const ax = (input.right?1:0) - (input.left?1:0);
+  player.vx = ax * SPEED;
+  player.x += player.vx;
+  if(player.x < 0) player.x = 0;
+  if(ax > 0) player.facing = 1;
+  else if(ax < 0) player.facing = -1;
+
+  // jump
+  if(jumpEdge && player.onGround){
+    player.vy = JUMPV;
+    player.onGround = false;
+  }
+
+  // gravity
+  const prevY = player.y;
+  player.vy += GRAV;
+  if(player.vy > MAXFALL) player.vy = MAXFALL;
+  player.y += player.vy;
+  player.onGround = false;
+
+  const pcx = player.x + player.w*0.5;
+
+  if(player.vy >= 0 && groundAt(pcx) && player.y + player.h >= GROUND_Y){
+    player.y = GROUND_Y - player.h;
+    player.vy = 0;
+    player.onGround = true;
+  }
+  if(player.vy >= 0){
+    for(let i=0;i<plats.length;i++){
+      const p = plats[i];
+      if(player.x + player.w > p.x && player.x < p.x + p.w &&
+         prevY + player.h <= p.y && player.y + player.h >= p.y){
+        player.y = p.y - player.h;
+        player.vy = 0;
+        player.onGround = true;
+      }
+    }
+  }
+
+  // animation state
+  if(player.onGround){
+    if(Math.abs(player.vx) > 0.1){
+      player.animT += 0.18;
+      player.frame = 1 + (Math.floor(player.animT) % 2);
+    } else { player.frame = 0; }
+  } else {
+    player.frame = 3;
+  }
+
+  if(player.inv > 0) player.inv--;
+
+  // safe respawn point
+  if(player.onGround){
+    const s = segAt(pcx);
+    if(s) respawnX = Math.max(s.x0 + 10, Math.min(player.x, s.x1 - 20));
+  }
+
+  // coins
+  for(let i=0;i<coins.length;i++){
+    const c = coins[i];
+    if(!c.alive) continue;
+    if(rectsOverlap(player.x, player.y, player.w, player.h, c.x, c.y, 6, 6)){
+      c.alive = false;
+      score += 10;
+      burst(c.x+3, c.y+3, 9, ['#fcd800','#fff8a0','#ffffff'], 2.4);
+    }
+  }
+
+  // enemies
+  for(let i=0;i<enemies.length;i++){
+    const e = enemies[i];
+    if(!e.alive) continue;
+    if(e.x < cam.x - 60 || e.x > cam.x + W + 60) continue;
+    e.x += e.dir * e.spd;
+    if(e.x < e.min){ e.x = e.min; e.dir = 1; }
+    if(e.x + e.w > e.max){ e.x = e.max - e.w; e.dir = -1; }
+
+    if(rectsOverlap(player.x, player.y, player.w, player.h, e.x, e.y, e.w, e.h)){
+      if(player.vy > 0 && prevY + player.h <= e.y + 4){
+        e.alive = false;
+        player.vy = -3.6;
+        score += 20;
+        burst(e.x+4, e.y+4, 10, ['#d07030','#ffffff','#a04020'], 2.4);
+      } else if(player.inv <= 0){
+        hurt();
+        return;
+      }
+    }
+  }
+
+  // pit death
+  if(player.y > H + 24){ hurt(); return; }
+
+  // particles
+  for(let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.17;
+    p.life--;
+    if(p.life <= 0) particles.splice(i,1);
+  }
+
+  // camera
+  const targetCam = player.x + player.w*0.5 - W*0.5 + 20;
+  cam.x += (targetCam - cam.x) * 0.12;
+  if(cam.x < 0) cam.x = 0;
+
+  // stream level
+  while(segs[segs.length-1].x1 < cam.x + W + 320) genChunk();
+}
+
+/* ---------------- background ---------------- */
+function drawSky(){
+  const bands = [
+    [0,46,'#4c84fc'],
+    [46,76,'#5c94fc'],
+    [76,96,'#74a8fc'],
+    [96,112,'#90bcfc']
+  ];
+  for(let i=0;i<bands.length;i++){
+    ctx.fillStyle = bands[i][2];
+    ctx.fillRect(0, bands[i][0], W, bands[i][1]-bands[i][0]);
+  }
+}
+function drawCloud(x,y){
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x+6, y,   12, 4);
+  ctx.fillRect(x+3, y+4, 20, 4);
+  ctx.fillRect(x,   y+8, 26, 3);
+  ctx.fillStyle = '#d8e8ff';
+  ctx.fillRect(x,   y+10, 26, 1);
+}
+function drawClouds(camX){
+  const off = camX * 0.12, period = 96;
+  const k0 = Math.floor(off/period) - 1;
+  for(let k=k0;k<k0+5;k++){
+    const x = Math.round(k*period - off + ((k*29)%34));
+    const y = 12 + ((k*47)%30);
+    drawCloud(x, y);
+  }
+}
+function drawTri(cx, baseY, w, h, col, snow, snowFrac){
+  for(let i=0;i<h;i++){
+    const t = i/h;
+    const ww = Math.max(1, Math.round(w*0.5*t));
+    ctx.fillStyle = (i < h*snowFrac) ? snow : col;
+    ctx.fillRect(Math.round(cx-ww), baseY-h+i, ww*2, 1);
+  }
+}
+function drawMountains(camX){
+  const off = camX * 0.25, period = 120, baseY = 112;
+  const k0 = Math.floor(off/period) - 1;
+  for(let k=k0;k<k0+4;k++){
+    const x = k*period - off;
+    const h = 48 + ((k*37)%16);
+    drawTri(x+52, baseY, 150, h, '#6c7cc0', '#dfe8ff', 0.30);
+  }
+}
+function drawHill(cx, baseY, w, h, col){
+  ctx.fillStyle = col;
+  for(let i=0;i<h;i++){
+    const t = i/h;
+    const ww = Math.round(w*0.5*Math.sin(t*Math.PI/2));
+    ctx.fillRect(Math.round(cx-ww), baseY-h+i, ww*2, 1);
+  }
+}
+function drawHills(camX){
+  const off = camX * 0.45, period = 84, baseY = 112;
+  const k0 = Math.floor(off/period) - 1;
+  for(let k=k0;k<k0+5;k++){
+    const x = k*period - off;
+    const h = 26 + ((k*53)%14);
+    drawHill(x+42, baseY, 96, h, '#2a8050');
+  }
+}
+
+/* ---------------- world render ---------------- */
+function drawGround(camX){
+  for(let i=0;i<segs.length;i++){
+    const s = segs[i];
+    const x0 = s.x0 - camX, x1 = s.x1 - camX;
+    if(x1 < 0 || x0 > W) continue;
+    const a = Math.max(0, Math.round(x0));
+    const b = Math.min(W, Math.round(x1));
+    const w = b - a;
+    if(w <= 0) continue;
+
+    ctx.fillStyle = '#4cd44c'; ctx.fillRect(a, GROUND_Y,   w, 2);
+    ctx.fillStyle = '#20a020'; ctx.fillRect(a, GROUND_Y+2, w, 2);
+    ctx.fillStyle = '#b05818'; ctx.fillRect(a, GROUND_Y+4, w, H-GROUND_Y-4);
+    ctx.fillStyle = '#8a3c10'; ctx.fillRect(a, H-6,        w, 6);
+
+    for(let x = Math.floor(a/8)*8; x < b; x += 8){
+      for(let y = GROUND_Y+4; y < H-6; y += 8){
+        if(hash2(x,y) > 0.62){
+          ctx.fillStyle = '#8a3c10';
+          const sx = Math.max(a, x+2), ex = Math.min(b, x+4);
+          if(ex > sx) ctx.fillRect(sx, y+2, ex-sx, 2);
+        }
+      }
+    }
+  }
+}
+function drawPlats(camX){
+  for(let i=0;i<plats.length;i++){
+    const p = plats[i];
+    const x = Math.round(p.x - camX);
+    if(x + p.w < 0 || x > W) continue;
+    ctx.fillStyle = '#e8b830'; ctx.fillRect(x, p.y, p.w, 3);
+    ctx.fillStyle = '#a86810'; ctx.fillRect(x, p.y+3, p.w, 4);
+    ctx.fillStyle = '#603008';
+    for(let k=8;k<p.w;k+=8) ctx.fillRect(x+k, p.y+3, 1, 4);
+    ctx.fillRect(x, p.y+7, p.w, 1);
+  }
+}
+function drawCoin(c, camX){
+  const x = Math.round(c.x - camX), y = Math.round(c.y);
+  if(x < -8 || x > W+8) return;
+  const CW = [6,4,2,4];
+  const fr = Math.floor((tick*0.12 + c.ph) % 4);
+  const w = CW[fr];
+  const ox = Math.floor((6-w)/2);
+  ctx.fillStyle = '#e8a000'; ctx.fillRect(x+ox, y, w, 6);
+  ctx.fillStyle = '#fcd800'; ctx.fillRect(x+ox, y+1, w, 4);
+  if(w >= 4){
+    ctx.fillStyle = '#fff0a0';
+    ctx.fillRect(x+ox+1, y+2, 1, 2);
+  }
+}
+function drawEnemy(e, camX){
+  const x = Math.round(e.x - camX), y = e.y;
+  if(x < -12 || x > W+12) return;
+  ctx.fillStyle = '#a04020'; ctx.fillRect(x,   y+1, 8, 6);
+  ctx.fillStyle = '#d07030'; ctx.fillRect(x+1, y+2, 6, 3);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(x+2, y+2, 2, 2);
+  ctx.fillRect(x+5, y+2, 2, 2);
+  ctx.fillStyle = '#101010';
+  ctx.fillRect(x+3 + (e.dir>0?1:0), y+3, 1, 1);
+  ctx.fillRect(x+6 - (e.dir>0?1:0), y+3, 1, 1);
+  ctx.fillStyle = '#502008';
+  const ph = Math.floor(tick/8) % 2;
+  ctx.fillRect(x + (ph?0:1), y+7, 3, 1);
+  ctx.fillRect(x + (ph?5:4), y+7, 3, 1);
+}
+function drawHero(sx, sy, facing, frame){
+  const C = {
+    cap:'#e03028', capD:'#a01810', skin:'#f8c090', hair:'#4a2410',
+    shirt:'#e03028', ovr:'#2850d8', shoe:'#5a2810', eye:'#101018'
+  };
+  const f = (dx,dy,dw,dh,c)=>{
+    const rx = facing >= 0 ? sx+dx : sx + 8 - dx - dw;
+    ctx.fillStyle = c;
+    ctx.fillRect(rx, sy+dy, dw, dh);
+  };
+  f(1,0,6,1,C.cap);
+  f(0,1,8,1,C.capD);
+  f(1,2,6,3,C.skin);
+  f(0,2,1,3,C.hair);
+  f(7,2,1,2,C.hair);
+  f(4,3,1,2,C.eye);
+  f(1,5,6,3,C.shirt);
+  f(2,6,4,3,C.ovr);
+
+  if(frame === 3){
+    f(0,3,1,3,C.skin);
+    f(7,3,1,3,C.skin);
+    f(1,9,2,2,C.ovr); f(5,9,2,2,C.ovr);
+    f(0,11,3,1,C.shoe); f(5,11,3,1,C.shoe);
+  } else {
+    f(0,6,1,3,C.skin);
+    f(7,6,1,3,C.skin);
+    if(frame === 0){
+      f(2,9,2,3,C.ovr); f(4,9,2,3,C.ovr);
+      f(1,11,3,1,C.shoe); f(4,11,3,1,C.shoe);
+    } else if(frame === 1){
+      f(1,9,2,3,C.ovr); f(5,9,2,2,C.ovr);
+      f(0,11,3,1,C.shoe); f(5,10,3,1,C.shoe);
+    } else {
+      f(5,9,2,3,C.ovr); f(1,9,2,2,C.ovr);
+      f(5,11,3,1,C.shoe); f(0,10,3,1,C.shoe);
+    }
+  }
+}
+
+/* ---------------- hud + render ---------------- */
+function drawHUD(){
+  const sc = 'SCORE ' + String(score).padStart(4,'0');
+  drawText(sc, 5, 5, '#14305a');
+  drawText(sc, 4, 4, '#ffffff');
+  for(let i=0;i<lives;i++) drawHeart(W - 12 - i*10, 4);
+
+  if(demoMode){
+    const t = 'DEMO';
+    const tw = t.length*4 - 1;
+    const bx = Math.round((W-tw)/2);
+    if(Math.floor(tick/22) % 2 === 0){
+      drawText(t, bx+1, 5, '#14305a');
+      drawText(t, bx, 4, '#ffe040');
+    }
+    const h2 = 'PRESS ARROW';
+    const hw = h2.length*4 - 1;
+    drawText(h2, Math.round((W-hw)/2)+1, H-9, '#14305a');
+    drawText(h2, Math.round((W-hw)/2), H-10, '#ffffff');
+  }
+}
+
+function render(){
+  const camX = Math.round(cam.x);
+
+  drawSky();
+  drawClouds(camX);
+  drawMountains(camX);
+  drawHills(camX);
+  drawGround(camX);
+  drawPlats(camX);
+
+  for(let i=0;i<coins.length;i++){
+    const c = coins[i];
+    if(c.alive) drawCoin(c, camX);
+  }
+  for(let i=0;i<enemies.length;i++){
+    if(enemies[i].alive) drawEnemy(enemies[i], camX);
+  }
+
+  for(let i=0;i<particles.length;i++){
+    const p = particles[i];
+    ctx.globalAlpha = Math.max(0, Math.min(1, p.life/14));
+    ctx.fillStyle = p.col;
+    ctx.fillRect(Math.round(p.x-camX), Math.round(p.y), 1, 1);
+  }
+  ctx.globalAlpha = 1;
+
+  if(!(player.inv > 0 && Math.floor(tick/4) % 2 === 0)){
+    drawHero(Math.round(player.x - camX), Math.round(player.y), player.facing, player.frame);
+  }
+
+  drawHUD();
+}
+
+/* ---------------- input ---------------- */
+function takeControl(){
+  if(demoMode){
+    demoMode = false;
+    prevJump = true;
+  }
+}
+window.addEventListener('keydown', e=>{
+  if(e.code === 'ArrowLeft' || e.code === 'ArrowRight' || e.code === 'ArrowUp' ||
+     e.code === 'ArrowDown' || e.code === 'Space'){
+    e.preventDefault();
+    takeControl();
+    keys[e.code] = true;
+  }
+});
+window.addEventListener('keyup', e=>{
+  keys[e.code] = false;
+});
+window.addEventListener('blur', ()=>{ for(const k in keys) keys[k] = false; });
+
+/* ---------------- boot ---------------- */
+for(let i=0;i<8;i++) genChunk();
+player.x = 20;
+player.y = GROUND_Y - player.h;
+cam.x = 0;
+
+let last = performance.now(), acc = 0;
+function frame(now){
+  requestAnimationFrame(frame);
+  let dt = (now - last)/1000;
+  last = now;
+  if(dt > 0.2) dt = 0.2;
+  acc += dt;
+  let guard = 0;
+  while(acc >= 1/60 && guard++ < 6){
+    update();
+    acc -= 1/60;
+  }
+  render();
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
